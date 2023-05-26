@@ -1,0 +1,57 @@
+apply plugin: 'maven-publish'
+
+android {
+    publishing {
+        singleVariant("release")
+    }
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            mavenRelease(MavenPublication) {
+                groupId pom_group_id
+                artifactId project.name
+                version pom_version_name
+
+                artifact(sourceJar)
+                artifact(bundleReleaseAar)
+
+                pom.withXml {
+                    // make sure to include transistive dependencies
+                    def dependencies = asNode().appendNode('dependencies')
+                    configurations.getByName("releaseCompileClasspath")
+                            .getResolvedConfiguration()
+                            .getFirstLevelModuleDependencies()
+                            .each {
+                                if (it.moduleVersion != "unspecified") { //ignore internal modules
+                                    def dependency = dependencies.appendNode('dependency')
+                                    dependency.appendNode('groupId', it.moduleGroup)
+                                    dependency.appendNode('artifactId', it.moduleName)
+                                    dependency.appendNode('version', it.moduleVersion)
+                                }
+                            }
+                }
+            }
+        }
+
+        repositories {
+            maven {
+                Properties properties = new Properties()
+                properties.load(project.rootProject.file('user.properties').newDataInputStream())
+
+                name = "fury"
+                url = properties.getProperty("maven_repo_url")
+                credentials {
+                    username = properties.getProperty("maven_repo_username")
+                    password = properties.getProperty("maven_repo_password")
+                }
+            }
+        }
+    }
+}
+
+task sourceJar(type: Jar) {
+    from android.sourceSets.main.java.srcDirs
+    classifier "sources"
+}
